@@ -107,7 +107,7 @@ namespace TestGolfTeeGameSolver
         {
             bool[] pegs = Enumerable.Repeat(true, 15).ToArray();
             pegs[5] = false;
-            var jumps = new[] { new LegalJump(5, 2) };
+            var jumps = new List<LegalJump> { new LegalJump(5, 2) };
             var board = new Board(pegs, jumps, 3);
             Assert.False(board.Pegs[5]);
             Assert.True(board.Pegs[2]);

@@ -66,7 +66,7 @@ namespace GolfTeeGameEngine
         }
 
         // Existing state constructor
-        public Board(bool[] pegs, LegalJump[] jumps, int moveNum)
+        public Board(bool[] pegs, List<LegalJump> jumps, int moveNum)
         {
             MoveNum = moveNum;
             Pegs = new BitArray(HoleCount);
@@ -133,7 +133,6 @@ namespace GolfTeeGameEngine
 
         private int AnalyzeJumps()
         { 
-
             var result = PegCount;
 
             var legalJumps = LegalJumps();
@@ -182,6 +181,24 @@ namespace GolfTeeGameEngine
                 Console.WriteLine($"Jump from {jump.From} to {jump.To}.");
             }
             return result;
+        }
+
+        public bool Undo()
+        {
+            if (Jumps.Count > 0)
+            {
+                var lastJump = Jumps[Jumps.Count - 1];
+
+                if (lastJump != null && TryLegalToAndFrom(lastJump.To, lastJump.From, out int over))
+                {
+                    Pegs[lastJump.To] = false;
+                    Pegs[lastJump.From] = true;
+                    Pegs[over] = true;
+                    Jumps.RemoveAt(Jumps.Count -1);
+                    return true;
+                }
+            }
+            return false;
         }
 
         public BitArray Pegs;
