@@ -1,0 +1,31 @@
+﻿@page
+@model GameModel
+<h2>Golf Tee Game</h2>
+
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Move From</th>
+            <th>Move To</th>
+            <th>Resulting Peg Count</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var (move, pegsLeft) in Model.PossibleMoves)
+        {
+            <tr>
+                <td>@move.From</td>
+                <td>@move.To</td>
+                <td>@pegsLeft pegs remaining</td>
+                <td>
+                    <form method="post">
+                        <input type="hidden" name="MoveFrom" value="@move.From" />
+                        <input type="hidden" name="MoveTo" value="@move.To" />
+                        <button type="submit" class="btn btn-primary">Make this move</button>
+                    </form>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
