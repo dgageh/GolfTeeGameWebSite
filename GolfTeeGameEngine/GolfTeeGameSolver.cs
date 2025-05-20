@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using System.Diagnostics;
 
 namespace GolfTeeGameEngine
 {
@@ -35,6 +36,9 @@ namespace GolfTeeGameEngine
     }
     public class LegalJump
     { 
+        public LegalJump()
+        {
+        }
         public LegalJump(int to, int from)
         {
             To = to;
@@ -158,7 +162,9 @@ namespace GolfTeeGameEngine
         }
 
         public List<(LegalJump, int)> AnalyzeLegalJumps()
-        {         
+        {
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
             var result = new List<(LegalJump, int)>();
 
             var legalJumps = LegalJumps();        
@@ -176,10 +182,8 @@ namespace GolfTeeGameEngine
                 }
                 board = this;
             }
-            foreach (var jump in Jumps)
-            {
-                Console.WriteLine($"Jump from {jump.From} to {jump.To}.");
-            }
+            sw.Stop();
+            Console.WriteLine($"Elapsed time anlyzing jumps {sw.ElapsedMilliseconds}");
             return result;
         }
 

@@ -1,21 +1,31 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using GolfTeeGameEngine;
-
 using GolfTeeGameWebApp.Models;
+using System.Linq;
 
 namespace GolfTeeGameWebApp.Pages
 {
     public class GamePageModel : PageModel
     {
-        // Bind the game state to the page so it can be received in POST requests.
+        // Bound game state – carries the full state from the hidden fields.
         [BindProperty]
-        public GameModel Game { get; set; }
+        public GameModel Game { get; set; } = new GameModel();
 
-        /* 
-         * The initial GET loads a new game.
-         * This action resets your game state to the starting conditions.
-         */
+        // Transient properties used for move operations.
+        // MoveFrom is set when a user clicks a filled peg to select it.
+        [BindProperty]
+        public int? MoveFrom { get; set; }
+
+        // Transient properties used for move operations.
+        // HintMoveFrom is set when a user clicks a hint to make the move.
+        [BindProperty]
+        public int? HintMoveFrom { get; set; }
+
+        // TargetPeg is set when the user clicks an empty legal hole.
+        [BindProperty]
+        public int? TargetPeg { get; set; }
+
         public void OnGet()
         {
             StartNewGame();
@@ -27,58 +37,83 @@ namespace GolfTeeGameWebApp.Pages
             return Page();
         }
 
-
-        public IActionResult OnPostMakeMove(int to, int from)
-        {
-            // Reconstruct the Board from the client-supplied state.
-            Board board = new Board(Game.PegState.ToArray(), Game.History, Game.MoveNumber);
-
-            board.Jump(to, from);
-
-            // Update the game state from the board.
-            UpdateGameState(board, false);
-            return Page();
-        }
-
         public IActionResult OnPostUndo()
         {
-            Board board = new Board(Game.PegState.ToArray(), Game.History, Game.MoveNumber);
+            var board = new Board(Game.PegState.ToArray(), Game.History, Game.MoveNumber);
             board.Undo();
-            UpdateGameState(board, false);
+            // Clear any transient move selections.
+            MoveFrom = null;
+            TargetPeg = null;
+            HintMoveFrom = null;
+            UpdateGameState(board, includeHints: false);
             return Page();
         }
 
         public IActionResult OnPostShowHints()
         {
-            Board board = new Board(Game.PegState.ToArray(), Game.History, Game.MoveNumber);
-            board.AnalyzeLegalJumps(); 
-            UpdateGameState(board, true);
+            var board = new Board(Game.PegState.ToArray(), Game.History, Game.MoveNumber);
+            board.AnalyzeLegalJumps();
+            UpdateGameState(board, includeHints: true);
             return Page();
         }
 
+        // Handler for when the user clicks on a filled legal peg to select it as the source.
+        public IActionResult OnPostSelectFrom(int from)
+        {
+            // The entire game state is bound via the hidden fields,
+            // so we just record the chosen source peg.
+            var board = new Board(Game.PegState.ToArray(), Game.History, Game.MoveNumber);
+            MoveFrom = from;
+            UpdateGameState(board, includeHints: false);
+            return Page();
+        }
+
+        // Handler for executing a move.
+        public IActionResult OnPostMakeMove()
+        {
+            int? sourcePeg = HintMoveFrom ?? MoveFrom;
+            // Both the source peg (MoveFrom) and the destination (TargetPeg) must be provided.
+            if (!sourcePeg.HasValue || !TargetPeg.HasValue)
+            {
+                // Optionally, display an error message.
+                return Page();
+            }
+
+            var board = new Board(Game.PegState.ToArray(), Game.History, Game.MoveNumber);
+            board.Jump(TargetPeg.Value, MoveFrom.Value);
+
+            // Clear transient move data after the move.
+            MoveFrom = null;
+            TargetPeg = null;
+            HintMoveFrom = null;
+
+            UpdateGameState(board, includeHints: false);
+            return Page();
+        }
+
+        // Creates a new game by instantiating a new Board.
         private void StartNewGame()
         {
             var random = new Random();
             int emptyPegHole = random.Next(16);
-            var board = new Board(emptyPegHole); 
+            var board = new Board(emptyPegHole);
 
-            UpdateGameState(board, false);
+            // Clear any move selection.
+            MoveFrom = null;
+            TargetPeg = null;
+            UpdateGameState(board, includeHints: false);
         }
 
+        // Updates the Game state in the model from the Board object.
         private void UpdateGameState(Board board, bool includeHints)
         {
-            List<LegalJump> legalJumps = new();
-            List<int> hints = new();
-            if (!includeHints)
-            {
-                legalJumps = board.LegalJumps().ToList();
-            }
-            else
-            {
-                var movesWithHints = board.AnalyzeLegalJumps();
-                legalJumps = movesWithHints.Select(t => t.Item1).ToList();
-                hints = movesWithHints.Select(t => t.Item2).ToList();
-            }
+            // Get the legal moves and, optionally, move hints.
+            var legalJumps = (!includeHints)
+                ? board.LegalJumps().ToList()
+                : board.AnalyzeLegalJumps().Select(t => t.Item1).ToList();
+            var hints = (!includeHints)
+                ? new System.Collections.Generic.List<int>()
+                : board.AnalyzeLegalJumps().Select(t => t.Item2).ToList();
 
             Game = new GameModel
             {
