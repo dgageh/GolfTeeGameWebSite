@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 
 namespace GolfTeeGameEngine
@@ -173,7 +174,7 @@ namespace GolfTeeGameEngine
             return false;
         }
 
-        private static readonly Dictionary<ushort, int> _analyzeJumpsMemo = new();
+        private static readonly ConcurrentDictionary<ushort, int> _analyzeJumpsMemo = new();
 
         private int AnalyzeJumps()
         {
