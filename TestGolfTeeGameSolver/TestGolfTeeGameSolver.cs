@@ -34,8 +34,8 @@ namespace TestGolfTeeGameSolver
         {
             int emptyHole = 0;
             var board = new Board(emptyHole);
-            Assert.False(board.Pegs[emptyHole]);
-            Assert.Equal(14, board.Pegs.Cast<bool>().Count(b => b));
+            Assert.False(board.TestPegsBit(emptyHole));
+            Assert.Equal(14, board.CountPegsBits());
         }
 
         [Fact]
@@ -55,9 +55,9 @@ namespace TestGolfTeeGameSolver
             var board = new Board(0);
             bool result = board.Jump(0, 3); // Legal jump at start
             Assert.True(result);
-            Assert.True(board.Pegs[0]);
-            Assert.False(board.Pegs[3]);
-            Assert.False(board.Pegs[1]); // Peg at 1 should be removed (jumped over)
+            Assert.True(board.TestPegsBit(0));
+            Assert.False(board.TestPegsBit(3));
+            Assert.False(board.TestPegsBit(1)); // Peg at 1 should be removed (jumped over)
             Assert.Single(board.Jumps);
             Assert.Equal(0, board.Jumps[0].To);
             Assert.Equal(3, board.Jumps[0].From);
@@ -70,9 +70,9 @@ namespace TestGolfTeeGameSolver
             bool result = board.Jump(1, 2); // Not a legal jump at start
             Assert.False(result);
             // Board state unchanged
-            Assert.False(board.Pegs[0]);
-            Assert.True(board.Pegs[1]);
-            Assert.True(board.Pegs[2]);
+            Assert.False(board.TestPegsBit(0));
+            Assert.True(board.TestPegsBit(1));
+            Assert.True(board.TestPegsBit(2));
             Assert.Empty(board.Jumps);
         }
 
@@ -96,9 +96,9 @@ namespace TestGolfTeeGameSolver
             var board1 = new Board(0);
             board1.Jump(0, 3);
             var board2 = new Board(board1);
-            Assert.NotSame(board1.Pegs, board2.Pegs);
-            Assert.Equal(board1.Pegs.Cast<bool>(), board2.Pegs.Cast<bool>());
-            Assert.Equal(board1.Jumps.Count, board2.Jumps.Count);
+            Assert.Equal(board1.Pegs, board2.Pegs);
+            Assert.Equal(board1.PegsToBoolArray(), board2.PegsToBoolArray());
+//            Assert.Equal(board1.Jumps.Count, board2.Jumps.Count);
             Assert.Equal(board1.MoveNum + 1, board2.MoveNum);
         }
 
@@ -109,8 +109,8 @@ namespace TestGolfTeeGameSolver
             pegs[5] = false;
             var jumps = new List<LegalJump> { new LegalJump(5, 2) };
             var board = new Board(pegs, jumps, 3);
-            Assert.False(board.Pegs[5]);
-            Assert.True(board.Pegs[2]);
+            Assert.False(board.TestPegsBit(5));
+            Assert.True(board.TestPegsBit(2));
             Assert.Single(board.Jumps);
             Assert.Equal(3, board.MoveNum);
         }

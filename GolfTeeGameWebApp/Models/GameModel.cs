@@ -12,6 +12,7 @@ namespace GolfTeeGameWebApp.Models
         public List<bool> PegState { get; set; }
         public List<int> Hints { get; set; }
         public int MoveNumber { get; set; }
+        public int BestResult { get; set; }
         public GameModel()
         {
             PossibleMovesWithHints = new();
@@ -20,6 +21,7 @@ namespace GolfTeeGameWebApp.Models
             PegState = new();
             Hints = new();
             MoveNumber = 0;
+            BestResult = 1;
         }
     }
 }

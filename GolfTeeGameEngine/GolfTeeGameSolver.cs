@@ -52,32 +52,69 @@ namespace GolfTeeGameEngine
     {
         private const int HoleCount = 15;
         public int MoveNum { get; }
-        private int PegCount => Pegs.Cast<bool>().Count(bit => bit);
+        private int PegCount => CountPegsBits();
         
         // New game constructor
         public Board(int emptyPegHole)
         {
             MoveNum = 0;
-            Pegs = new BitArray(HoleCount);
+            Pegs = 0;
             Jumps = new();
             for (int i = 0; i < HoleCount; i++)
             {
-                if (i == emptyPegHole)
-                    Pegs[i] = false;
-                else
-                    Pegs[i] = true;
+                if (i != emptyPegHole)
+                    SetPegsBit(i);
             }
+        }
+
+        private void SetPegsBit(int n)
+        {
+            Pegs |= (ushort)(1 << n);
+        }
+
+        private void ClearPegsBit(int n)
+        {
+            Pegs &= (ushort)~(1 << n);
+        }
+
+        public bool TestPegsBit(int n)
+        {
+            return (Pegs & (1 << n)) != 0;
+        }
+
+        public int CountPegsBits()
+        {
+            int i = 0;
+            ushort pegs = Pegs;
+            while (pegs != 0)
+            {
+                i++;
+                pegs &= (ushort)(pegs - 1);
+            }
+            return i;
+        }
+
+        public bool[] PegsToBoolArray()
+        {
+            bool[] result = new bool[HoleCount];
+
+            for (int i = 0; i < HoleCount; i++)
+            {
+                result[i] = TestPegsBit(i);
+            }
+            return result;
         }
 
         // Existing state constructor
         public Board(bool[] pegs, List<LegalJump> jumps, int moveNum)
         {
             MoveNum = moveNum;
-            Pegs = new BitArray(HoleCount);
+
             Jumps = jumps.ToList();
             for (int i = 0; i < HoleCount  && i < pegs.Length; i++)
             {
-                Pegs[i] = pegs[i];
+                if (pegs[i])
+                    SetPegsBit(i);
             }
         }
 
@@ -85,8 +122,9 @@ namespace GolfTeeGameEngine
         public Board(Board other)
         {
             MoveNum = other.MoveNum + 1;
-            Jumps = other.Jumps.ToList();
-            Pegs = new BitArray(other.Pegs);
+            Jumps = new();
+//            Jumps = other.Jumps.ToList(); Not needed for copy constructor cases, and it makes analysis slower.
+            Pegs = other.Pegs;
         }
 
         private bool TryLegalToAndFrom(int to, int from, out int over)
@@ -96,7 +134,7 @@ namespace GolfTeeGameEngine
 
         private bool IsLegalJump(int to, int from, int over)
         {
-            if (!Pegs[to] && Pegs[from] && Pegs[over])
+            if (!TestPegsBit(to) && TestPegsBit(from) && TestPegsBit(over))
             {
                 if (Rules.LegalJumpsByDestination[to][from] == over)
                 {
@@ -126,21 +164,25 @@ namespace GolfTeeGameEngine
         {
             if (TryLegalToAndFrom(to, from, out int over) && IsLegalJump(to, from, over))
             {
-                Pegs[to] = true;
-                Pegs[from] = false;
-                Pegs[over] = false;
+                SetPegsBit(to);
+                ClearPegsBit(from);
+                ClearPegsBit(over);
                 Jumps.Add(new LegalJump(to, from));
                 return true;
             }
             return false;
         }
 
-        private int AnalyzeJumps()
-        { 
-            var result = PegCount;
+        private static readonly Dictionary<ushort, int> _analyzeJumpsMemo = new();
 
+        private int AnalyzeJumps()
+        {
+            if (_analyzeJumpsMemo.TryGetValue(Pegs, out int cached))
+                return cached;
+
+            var result = PegCount;
             var legalJumps = LegalJumps();
-            
+
             foreach (var legalJump in legalJumps)
             {
                 var board = new Board(this);
@@ -156,15 +198,14 @@ namespace GolfTeeGameEngine
                 {
                     throw new InvalidOperationException($"Expected jump from {legalJump.From} to {legalJump.To} to be legal on move {board.MoveNum}");
                 }
-                board = this;
             }
+
+            _analyzeJumpsMemo[Pegs] = result;
             return result;
         }
 
         public List<(LegalJump, int)> AnalyzeLegalJumps()
         {
-            Stopwatch sw = new Stopwatch();
-            sw.Start();
             var result = new List<(LegalJump, int)>();
 
             var legalJumps = LegalJumps();        
@@ -182,8 +223,6 @@ namespace GolfTeeGameEngine
                 }
                 board = this;
             }
-            sw.Stop();
-            Console.WriteLine($"Elapsed time anlyzing jumps {sw.ElapsedMilliseconds}");
             return result;
         }
 
@@ -195,9 +234,9 @@ namespace GolfTeeGameEngine
 
                 if (lastJump != null && TryLegalToAndFrom(lastJump.To, lastJump.From, out int over))
                 {
-                    Pegs[lastJump.To] = false;
-                    Pegs[lastJump.From] = true;
-                    Pegs[over] = true;
+                    ClearPegsBit(lastJump.To);
+                    SetPegsBit(lastJump.From);
+                    SetPegsBit(over);
                     Jumps.RemoveAt(Jumps.Count -1);
                     return true;
                 }
@@ -205,7 +244,12 @@ namespace GolfTeeGameEngine
             return false;
         }
 
-        public BitArray Pegs;
+        public int BestPossibleResult()
+        {
+            return AnalyzeJumps();
+        }
+
+        public ushort Pegs;
         public List<LegalJump> Jumps;
     }
 }

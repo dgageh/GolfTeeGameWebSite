@@ -1,10 +1,205 @@
 ﻿@page
-@model IndexModel
+@model GolfTeeGameWebApp.Pages.GamePageModel
 @{
-    ViewData["Title"] = "Home page";
-}
+    // Retrieve the game state from the bound model.
+    var pegs = Model.Game.PegState;
+    var legalJumps = Model.Game.PossibleMoves;
+    var hints = Model.Game.Hints;
+    var history = Model.Game.History;
+    var moveNumber = Model.Game.MoveNumber;
+    var bestResult = Model.Game.BestResult;
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+    // Use the transient MoveFrom property as the currently selected peg for a move source.
+    int? currentMoveFrom = Model.MoveFrom;
+
+    // Build a lookup of legal moves: from peg index → destination peg indices.
+    var legalMovesLookup = legalJumps
+        .GroupBy(j => j.From)
+        .ToDictionary(g => g.Key, g => g.Select(j => j.To).ToList());
+    var legalFroms = legalJumps.Select(j => j.From).Distinct().ToHashSet();
+}
+<title>Peg Jump</title>
+<h1>Peg Jump</h1>
+<h4>The Cracker Barrel Golf Tees Game</h4>
+<div class="centered">
+    <h6>To Play</h6>
+    <ul>
+        <li>Remove as many pegs as you can.</li>
+        <li>Yellow circles represent pegs, white ones are holes.</li>
+        <li>To remove a peg, jump another over it into a hole.</li>
+    </ul>
 </div>
+
+<!-- Single unified form which posts all game state on every action -->
+<form method="post" id="gameForm">
+    <!-- Hidden fields for game state -->
+    @for (int i = 0; i < pegs.Count; i++)
+    {
+        <input asp-for="Game.PegState[@i]" type="hidden" name="Game.PegState[@i]" value="@pegs[i]" />
+    }
+    @for (int i = 0; i < history.Count; i++)
+    {
+        <input asp-for="Game.History[@i].From" type="hidden" name="Game.History[@i].From" value="@history[i].From" />
+        <input asp-for="Game.History[@i].To" type="hidden" name="Game.History[@i].To" value="@history[i].To" />
+    }
+    <input asp-for="Game.MoveNumber" type="hidden" name="Game.MoveNumber" value="@moveNumber" />
+    <!-- Hidden field used to hold the source peg if one is selected -->
+    <input asp-for="MoveFrom" type="hidden" name="MoveFrom" value="@(currentMoveFrom.HasValue ? currentMoveFrom.Value.ToString() : "")" />
+
+    <!-- Top action controls -->
+    <div class="game-controls">
+        <button type="submit" asp-page-handler="NewGame" class="btn btn-primary btn-sm">New Game</button>
+        <button type="submit" asp-page-handler="Undo" class="btn btn-primary btn-sm" disabled="@(history.Count == 0 ? "disabled" : null)">Undo</button>
+    </div>
+
+
+    <!-- The peg board -->
+    <div class="peg-board">
+        @{
+            // Define rows of the board.
+            int[][] rows = new int[][]
+            {
+                new[] { 0 },
+                new[] { 1, 2 },
+                new[] { 3, 4, 5 },
+                new[] { 6, 7, 8, 9 },
+                new[] { 10, 11, 12, 13, 14 }
+            };
+        }
+        @for (int row = 0; row < rows.Length; row++)
+        {
+            <div class="peg-row">
+                @foreach (var idx in rows[row])
+                {
+                    var isFilled = pegs[idx];
+                    var isLegalFrom = legalFroms.Contains(idx);
+                    var isSelected = (currentMoveFrom.HasValue && currentMoveFrom.Value == idx);
+                    bool isLegalTo = false;
+                    if (currentMoveFrom.HasValue && legalMovesLookup.ContainsKey(currentMoveFrom.Value))
+                    {
+                        isLegalTo = legalMovesLookup[currentMoveFrom.Value].Contains(idx);
+                    }
+                    var holeClass = "peg-hole";
+                    if (isFilled) { holeClass += " peg-filled"; }
+                    if (isLegalFrom && isFilled && !isSelected) { holeClass += " peg-legal"; }
+                    if (isSelected) { holeClass += " peg-selected"; }
+                    if (!isFilled && isLegalTo) { holeClass += " peg-move-target"; }
+                    <div class="@holeClass" style="position: relative;">
+                        <!-- Optional: Render the peg number in a centered label -->
+                        <span class="peg-label">@idx</span>
+
+                        @if (isFilled)
+                        {
+                            if (isLegalFrom)
+                            {
+                                <button type="submit" asp-page-handler="SelectFrom" name="from" value="@idx" title="Select peg @idx"></button>
+                            }
+                        }
+                        else if (isLegalTo)
+                        {
+                            <button type="submit" asp-page-handler="MakeMove" name="TargetPeg" value="@idx" title="Move to hole @idx"></button>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @if (legalJumps.Count > 0)
+    {
+        <div class="centered">
+            <h6>Best Possible Result: @bestResult peg(s) left.</h6>
+        </div>
+
+        <div class="game-controls">
+            <button type="submit" asp-page-handler="ShowMoves" id="showMovesSubmit" style="display:none"></button>
+            <input type="checkbox"
+            id="ShowMoves"
+            name="ShowMoves"
+            value="true"
+            @(Model.ShowMoves ? "checked" : "")
+            onchange="document.getElementById('showMovesSubmit').click();" />
+            <label for="ShowMoves">Show Legal Moves</label>
+            @if (Model.ShowMoves)
+            {
+                <button type="submit" asp-page-handler="ShowHints" id="showHintsSubmit" style="display:none"></button>
+                <input type="checkbox"
+                id="ShowHints"
+                name="ShowHints"
+                value="true"
+                @(Model.ShowHints ? "checked" : "")
+                onchange="document.getElementById('showHintsSubmit').click();" />
+                <label for="ShowHints">Show Hints</label>
+            }
+        </div>
+    }
+    else
+    {
+        <h5><strong>Game Over! You have @pegs.Where(p=>p).Count() peg(s) left.</strong></h5>
+    }
+    @{
+        bool showHints = Model.ShowHints && legalJumps.Count == hints.Count;
+    }
+
+    <!-- Hints and Move History -->
+    @if (Model.ShowMoves && legalJumps.Count > 0)
+    {
+        @if (!showHints)
+        {
+            <h6>Possible Jumps</h6>
+        }
+        else
+        {
+            <h6>Possible Jumps (With Hints)</h6>
+        }
+        <table class="table table-sm table-bordered hint-table">
+            <thead>
+                <tr>
+                    <th>Move From</th>
+                    <th>Move To</th>
+                    @if (showHints)
+                        {
+                            <th>Best Outcome</th>
+                        }
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                    @for (int i = 0; i < legalJumps.Count; i++)
+                    {
+                        var move = legalJumps[i];
+                        <tr>
+                            <td>@move.From</td>
+                            <td>@move.To</td>
+                        @if (showHints)
+                            {
+                                var best = hints.Count > i ? hints[i] : 0;
+                                    <td>@best peg@(best == 1 ? "" : "s") remaining</td>
+                            }
+                            <td>
+                                <button type="submit" asp-page-handler="MoveFromList" name="ListMove" value="@i" class="btn btn-primary btn-sm">
+                                    Make this jump
+                                </button>
+                            </td>
+                        </tr>
+                    }
+            </tbody>
+        </table>
+
+    }
+
+    @if (history.Count > 0)
+    {
+        <div class="centered">
+            <h5>Your Jumps</h5>
+            <table>
+                <tbody>
+                    @foreach (var jump in history)
+                    {
+                        <tr><td>Peg @jump.From → @jump.To</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</form>
